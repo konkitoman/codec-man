@@ -30,6 +30,8 @@ pub struct Application {
     offset: usize,
     length: usize,
     speed: f32,
+
+    resolution: usize,
 }
 
 impl Default for Application {
@@ -114,6 +116,7 @@ impl Default for Application {
             input_stream,
             input_receiver,
             input_sender: input_sender_rec,
+            resolution: 1000,
         }
     }
 }
@@ -129,7 +132,7 @@ impl App for Application {
             }
         }
         egui::TopBottomPanel::bottom("Controls").show(ctx, |ui| {
-            ui.vertical(|ui| {
+            ui.horizontal(|ui| {
                 ui.add(egui::widgets::DragValue::new(&mut self.length).prefix("Length: "));
                 ui.add(egui::DragValue::new(&mut self.offset).prefix("Offset: "));
                 ui.add(egui::DragValue::new(&mut self.speed).prefix("Speed: "));
@@ -186,6 +189,11 @@ impl App for Application {
             ui.spinner();
         });
         egui::CentralPanel::default().show(ctx, |ui| {
+            ui.add(
+                egui::DragValue::new(&mut self.resolution)
+                    .prefix("Resolution: ")
+                    .speed(1),
+            );
             egui::plot::Plot::new("Buffer").show(ui, |ui| {
                 let bounds = ui.plot_bounds();
                 let range = bounds.min()[0].max(0.0)..bounds.max()[0].min(self.buffer.len() as f64);
@@ -196,7 +204,7 @@ impl App for Application {
                             (t, self.buffer[i] as f64)
                         },
                         range.clone(),
-                        (range.start as usize..range.end as usize).count(),
+                        self.resolution.min(self.buffer.len()),
                     ),
                 ));
                 ui.vline(
