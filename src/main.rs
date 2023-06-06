@@ -18,6 +18,7 @@ pub struct Application {
     buffer: Vec<f32>,
 
     rem: usize,
+    frequency: f64,
     offset: usize,
     length: usize,
     speed: f32,
@@ -72,6 +73,7 @@ impl Default for Application {
             length: 48 * 20,
             buffer: Vec::new(),
             speed: 1.0,
+            frequency: 0.1,
         }
     }
 }
@@ -82,14 +84,20 @@ impl App for Application {
             self.rem = rem;
         }
         egui::TopBottomPanel::bottom("Controls").show(ctx, |ui| {
-            ui.add(egui::widgets::DragValue::new(&mut self.length).prefix("Length"));
-            ui.add(egui::DragValue::new(&mut self.offset).prefix("Offset"));
-            ui.add(egui::DragValue::new(&mut self.speed).prefix("Speed"));
+            ui.add(egui::widgets::DragValue::new(&mut self.length).prefix("Length: "));
+            ui.add(egui::DragValue::new(&mut self.offset).prefix("Offset: "));
+            ui.add(egui::DragValue::new(&mut self.speed).prefix("Speed: "));
+            ui.add(
+                egui::DragValue::new(&mut self.frequency)
+                    .prefix("Freq: ")
+                    .speed(0.00001)
+                    .clamp_range(0..=1),
+            );
             if ui.button("Sin").clicked() {
                 self.buffer.resize(self.length, 0.0);
                 for i in 0..self.length {
                     let sample = i as f32;
-                    let sample = (sample * 0.01).sin();
+                    let sample = (sample as f64 * self.frequency).sin() as f32;
                     self.buffer[i] = sample;
                 }
             }
