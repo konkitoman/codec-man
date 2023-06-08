@@ -21,7 +21,9 @@ pub struct Application {
     input_receiver: mpsc::Receiver<Vec<f32>>,
     input_sender: mpsc::SyncSender<bool>,
 
+    buffers: Vec<Vec<f32>>,
     buffer: Vec<f32>,
+    encoded_buffer: Vec<i16>,
 
     recording: bool,
 
@@ -109,7 +111,7 @@ impl Default for Application {
             rem: 0,
             offset: 0,
             length: 48 * 20,
-            buffer: Vec::new(),
+            buffer: vec![],
             speed: 1.0,
             frequency: 0.1,
             recording: false,
@@ -117,6 +119,8 @@ impl Default for Application {
             input_receiver,
             input_sender: input_sender_rec,
             resolution: 1000,
+            encoded_buffer: vec![],
+            buffers: vec![],
         }
     }
 }
@@ -157,6 +161,34 @@ impl App for Application {
                 }
             }
 
+            if ui.button("Encode").clicked() {
+                let mut new_buffer = Vec::new();
+                let last = 0u8;
+                for byte in self.buffer.iter() {
+                    let byte = *byte as f64 * i16::MAX as f64;
+                    let byte = (byte - (last as f64 / i16::MAX as f64)) as i16;
+                    new_buffer.push(byte);
+                }
+                println!("Encoded: size {}", new_buffer.len());
+                self.encoded_buffer = new_buffer;
+            }
+
+            if ui.button("Decode").clicked() {
+                let mut new_buffer = Vec::new();
+                let last = 0f32;
+                for byte in self.encoded_buffer.iter() {
+                    let byte = *byte as f64 / i16::MAX as f64;
+                    let byte = byte + (last as f64 * i16::MAX as f64);
+                    let byte = byte as f32;
+                    new_buffer.push(byte);
+                }
+                self.buffer = new_buffer;
+                println!(
+                    "Decoded: size {}",
+                    self.buffer.len() * std::mem::size_of::<f32>()
+                );
+            }
+
             if ui.button("Clear").clicked() {
                 self.buffer.clear();
             }
@@ -177,6 +209,8 @@ impl App for Application {
                         let interpolate_sample =
                             (1.0 - fractional) * left_sample + fractional * right_sample;
                         new_buffer.push(interpolate_sample);
+                    } else if left_index < self.buffer.len() {
+                        new_buffer.push(self.buffer[left_index])
                     }
                 }
                 self.buffer = new_buffer;
@@ -186,6 +220,18 @@ impl App for Application {
                 self.output_sender.send(self.buffer.clone());
                 self.rem += 1;
             }
+
+            ui.horizontal(|ui| {
+                if ui.button("Save").clicked() {
+                    self.buffers.push(std::mem::take(&mut self.buffer));
+                }
+                for i in 0..self.buffers.len() {
+                    if ui.button(format!("Load: {i}")).clicked() {
+                        self.buffer = self.buffers[i].clone();
+                    }
+                }
+            });
+
             ui.spinner();
         });
         egui::CentralPanel::default().show(ctx, |ui| {
