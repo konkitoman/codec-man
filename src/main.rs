@@ -23,7 +23,7 @@ pub struct Application {
 
     buffers: Vec<Vec<f32>>,
     buffer: Vec<f32>,
-    encoded_buffer: Vec<i16>,
+    encoded_buffer: Vec<u8>,
 
     recording: bool,
 
@@ -163,11 +163,26 @@ impl App for Application {
 
             if ui.button("Encode").clicked() {
                 let mut new_buffer = Vec::new();
-                let last = 0u8;
+                let mut last = 0.0;
                 for byte in self.buffer.iter() {
-                    let byte = *byte as f64 * i16::MAX as f64;
-                    let byte = (byte - (last as f64 / i16::MAX as f64)) as i16;
-                    new_buffer.push(byte);
+                    let byte1 = *byte as f64 * i16::MAX as f64;
+                    let mut byte1 = (byte1 - (last as f64 * i16::MAX as f64)) as i16;
+                    last = *byte;
+                    if byte1 < i8::MAX as i16 && (i8::MIN as i16) < byte1 {
+                        println!("pbyte: {byte1}");
+                        let mut byte1 = byte1 as u8;
+                        if byte1 & 1 == 1 {
+                            byte1 -= 1;
+                        }
+                        new_buffer.push(byte1)
+                    } else {
+                        println!("nbyte: {byte1}");
+                        let mut bytes = byte1.to_le_bytes();
+                        if bytes[0] & 1 == 0 {
+                            bytes[0] += 1;
+                        }
+                        new_buffer.extend(bytes);
+                    }
                 }
                 println!("Encoded: size {}", new_buffer.len());
                 self.encoded_buffer = new_buffer;
@@ -175,12 +190,27 @@ impl App for Application {
 
             if ui.button("Decode").clicked() {
                 let mut new_buffer = Vec::new();
-                let last = 0f32;
-                for byte in self.encoded_buffer.iter() {
-                    let byte = *byte as f64 / i16::MAX as f64;
-                    let byte = byte + (last as f64 * i16::MAX as f64);
-                    let byte = byte as f32;
-                    new_buffer.push(byte);
+                let mut last = 0f32;
+                let mut encoded_buffer = self.encoded_buffer.clone();
+                let mut iter = encoded_buffer.drain(..);
+                while let Some(byte) = iter.next() {
+                    println!("Byte: {byte:8b}");
+                    if byte & 1 == 0 {
+                        if let Some(seccond_byte) = iter.next() {
+                            let byte =
+                                i16::from_le_bytes([byte, seccond_byte]) as f64 / i16::MAX as f64;
+                            let byte = byte + last as f64;
+                            let byte = byte as f32;
+                            last = byte;
+                            new_buffer.push(byte);
+                        }
+                    } else {
+                        let byte = (byte as i8) as f64 / i16::MAX as f64;
+                        let byte = byte + last as f64;
+                        let byte = byte as f32;
+                        last = byte;
+                        new_buffer.push(byte);
+                    }
                 }
                 self.buffer = new_buffer;
                 println!(
