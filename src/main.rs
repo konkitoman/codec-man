@@ -149,11 +149,11 @@ impl App for Application {
             }
 
             if ui.button("Sin").clicked() {
-                self.buffer.resize(self.length, 0.0);
+                self.buffer.resize(self.buffer.len().max(self.length), 0.0);
                 for i in 0..self.length {
                     let sample = i as f32;
-                    let sample = (sample as f64 * self.frequency).sin() as f32;
-                    self.buffer[i] = sample;
+                    let sample = (sample as f64 * self.frequency).sin() as f32 * 0.5;
+                    self.buffer[i] += sample;
                 }
             }
 
@@ -201,7 +201,11 @@ impl App for Application {
                     egui::plot::PlotPoints::from_parametric_callback(
                         |t| {
                             let i = t as usize;
-                            (t, self.buffer[i] as f64)
+                            if self.buffer.len() > i {
+                                (t, self.buffer[i] as f64)
+                            } else {
+                                (0.0, 0.0)
+                            }
                         },
                         range.clone(),
                         self.resolution.min(self.buffer.len()),
