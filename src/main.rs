@@ -1,10 +1,6 @@
-use std::{
-    collections::VecDeque,
-    sync::{mpsc, Mutex, RwLock},
-};
+use std::{collections::VecDeque, sync::mpsc};
 
 use cpal::{
-    platform::AlsaStream,
     traits::{DeviceTrait, HostTrait, StreamTrait},
     Device, Host, SampleRate, Stream, SupportedStreamConfig,
 };
@@ -59,7 +55,7 @@ impl Default for Application {
                         sample_rate: SampleRate(48000),
                         buffer_size: cpal::BufferSize::Default,
                     },
-                    move |data: &mut [f32], info| {
+                    move |data: &mut [f32], _| {
                         while let Ok(buff) = output_receiver.try_recv() {
                             buffer.extend(buff);
                         }
@@ -70,7 +66,7 @@ impl Default for Application {
                                 0.0
                             }
                         }
-                        output_rem_sender.send(buffer.len());
+                        let _ = output_rem_sender.send(buffer.len());
                     },
                     |error| eprintln!("Output stream Error: {error}"),
                     None,
@@ -87,12 +83,12 @@ impl Default for Application {
                         sample_rate: SampleRate(48000),
                         buffer_size: cpal::BufferSize::Default,
                     },
-                    move |data: &[f32], info| {
+                    move |data: &[f32], _| {
                         while let Ok(rec) = input_receiver_rec.try_recv() {
                             recording = rec;
                         }
                         if recording {
-                            input_sender.send(data.to_vec());
+                            let _ = input_sender.send(data.to_vec());
                         }
                     },
                     |error| eprintln!("Input stream Error: {error}"),
@@ -149,7 +145,7 @@ impl App for Application {
             });
 
             if ui.checkbox(&mut self.recording, "Recording").changed() {
-                self.input_sender.send(self.recording);
+                let _ = self.input_sender.send(self.recording);
             }
 
             if ui.button("Sin").clicked() {
@@ -166,7 +162,7 @@ impl App for Application {
                 let mut last = 0.0;
                 for byte in self.buffer.iter() {
                     let byte1 = *byte as f64 * i16::MAX as f64;
-                    let mut byte1 = (byte1 - (last as f64 * i16::MAX as f64)) as i16;
+                    let byte1 = (byte1 - (last as f64 * i16::MAX as f64)) as i16;
                     last = *byte;
                     if byte1 < i8::MAX as i16 && (i8::MIN as i16) < byte1 {
                         println!("pbyte: {byte1}");
@@ -247,7 +243,7 @@ impl App for Application {
             }
 
             if ui.button("Submit").clicked() {
-                self.output_sender.send(self.buffer.clone());
+                let _ = self.output_sender.send(self.buffer.clone());
                 self.rem += 1;
             }
 
@@ -283,7 +279,7 @@ impl App for Application {
                                 (0.0, 0.0)
                             }
                         },
-                        range.clone(),
+                        range,
                         self.resolution.min(self.buffer.len()),
                     ),
                 ));
@@ -297,9 +293,11 @@ impl App for Application {
 
 impl Drop for Application {
     fn drop(&mut self) {
-        self.input_stream.pause();
-        self.output_stream.pause();
+        let _ = self.input_stream.pause();
+        let _ = self.output_stream.pause();
         self.buffer.clear();
+        self.buffers.clear();
+        self.encoded_buffer.clear();
     }
 }
 
